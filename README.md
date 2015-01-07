@@ -1,7 +1,7 @@
 TrelloPrinter
 =============
 
-Trello board printer: generate a printable version of a Trello board.
+Trello board printer: generate a printable version of a Trello board including card descriptions and attachments.
 
 Usage: Open a Trello board, go to the menu of the board and click the "Share, Print and Export" option. Click the "Export to JSON" option and download the resulting json file. Call this program using the downloaded file as input. For example:
 
