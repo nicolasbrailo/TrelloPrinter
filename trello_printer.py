@@ -13,6 +13,10 @@ board_template = """
   width: 48%;
   display: inline-block;
   vertical-align: top;
+} .longcard {
+  margin: 5px;
+  border:1px solid black;
+  width: 98%;
 } .list {
   clear: both;
   margin-top: 10px;
@@ -67,6 +71,27 @@ by {{#members}}{{{fullName}}}, {{/members}}Last activity: {{dateLastActivity}} /
       </div>
     </div>
   {{/activeCards}}
+
+  {{#activeLongCards}}
+    <div class="col-md-6 longcard">
+      <h4><a href='{{url}}'>{{{name}}}</a></h4>
+      <p>
+      {{{desc}}}
+      </p>
+
+      {{#checklists}}
+        <ul>
+        {{#checkItems}}
+          <li>{{{name}}}</li>
+        {{/checkItems}}
+        </ul>
+      {{/checklists}}
+ 
+      <div class="no-print">
+        {{#attachments}} | <a href="{{url}}">{{name}}</a>{{/attachments}}
+      </div>
+    </div>
+  {{/activeLongCards}}
   </div>
 
 {{/activeLists}}
@@ -81,8 +106,8 @@ import cgi
 import codecs
 
 class Trello_Board(object):
-  def __init__(self, json_object):
-    self.board_json = self._transmogrify_trello_board(json_object)
+  def __init__(self, json_object, big_card_min_words):
+    self.board_json = self._transmogrify_trello_board(json_object, big_card_min_words)
 
   def html_render(self, template):
     return pystache.render(template, self.board_json).encode('utf-8')
@@ -109,7 +134,7 @@ class Trello_Board(object):
       obj[field] = htmlified
     return obj
 
-  def _transmogrify_trello_board(self, board):
+  def _transmogrify_trello_board(self, board, big_card_min_words):
     """ Transform a plain Trello format (list of stuff) to a hierarchical model
     more suitable for pystache """
     board = self._prettyHtml(board, ['name'])
@@ -125,10 +150,13 @@ class Trello_Board(object):
       if lst['closed']: continue
 
       # Get all the non-closed cards for this list
-      lst['activeCards'] = [ self._formatDates(self._prettyHtml(card, ['name', 'desc']), ['dateLastActivity']) \
+      activeCards = [ self._formatDates(self._prettyHtml(card, ['name', 'desc']), ['dateLastActivity']) \
                              for card in board['cards'] \
                              if card['idList'] == lst['id'] \
                                 and not card['closed'] ]
+
+      lst['activeCards'] = [card for card in activeCards if len(card['desc']) < big_card_min_words]
+      lst['activeLongCards'] = [card for card in activeCards if len(card['desc']) >= big_card_min_words]
 
       # Get all the active checklists
       for card in lst['activeCards']:
@@ -159,12 +187,12 @@ def pretty_print(jstuff):
   return json.dumps(jstuff, sort_keys=True, indent=4, separators=(',', ': '))
 
 
-def read_json_board(fp):
+def read_json_board(fp, big_card_min_words):
   trello_json = ""
   for ln in codecs.getreader('utf-8')(fp).readlines():
     trello_json += ln
 
-  return Trello_Board(json.loads(trello_json))
+  return Trello_Board(json.loads(trello_json), big_card_min_words)
 
 def create_pdf_bundle(args, board):
   # List of all pdf files to join
@@ -207,7 +235,7 @@ def create_pdf_bundle(args, board):
 
 
 def main(args):
-  board = read_json_board(sys.stdin)
+  board = read_json_board(sys.stdin, args.big_card_min_words)
   if not args.quiet: print >> sys.stderr, "Valid board found!"
 
   if args.html_output:
@@ -266,6 +294,10 @@ parser.add_argument("--no-bundle", action="store_false",
 parser.add_argument("--debug", action="store_true",
                     dest="print_debug_json", default=False,
                     help="Output a prettyfied version of the board's json.")
+parser.add_argument("-m", "--min_words", type=int, metavar='N',
+                    dest="big_card_min_words", default=800,
+                    help="Number of words after which a card is considered 'big'. "\
+                         "A single column layout is used for big cards. [800]")
 parser.add_argument("-q", "--quiet", action="store_true",
                     dest="quiet", default=False,
                     help="Run in quiet mode.")
